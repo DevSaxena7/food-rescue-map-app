@@ -1,16 +1,24 @@
 
-import React from "react";
+import React, { useEffect } from "react";
 import FoodCard from "./FoodCard";
 import { FoodListing } from "@/types";
 import { useApp } from "@/context/AppContext";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface FoodGridProps {
   listings?: FoodListing[];
   showOnlyAvailable?: boolean;
+  refreshOnMount?: boolean;
 }
 
-const FoodGrid = ({ listings, showOnlyAvailable = false }: FoodGridProps) => {
-  const { foodListings } = useApp();
+const FoodGrid = ({ listings, showOnlyAvailable = false, refreshOnMount = false }: FoodGridProps) => {
+  const { foodListings, fetchFoodListings } = useApp();
+  
+  useEffect(() => {
+    if (refreshOnMount) {
+      fetchFoodListings();
+    }
+  }, [fetchFoodListings, refreshOnMount]);
   
   const displayListings = listings || foodListings;
   const filteredListings = showOnlyAvailable 

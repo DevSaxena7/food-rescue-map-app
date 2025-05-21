@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useApp } from "@/context/AppContext";
@@ -21,8 +20,13 @@ import { CalendarIcon, MapPinIcon, UserIcon, MessageCircleIcon } from "lucide-re
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import ChatInterface from "../chat/ChatInterface";
 import FoodMap from "../map/FoodMap";
+import { Skeleton } from "@/components/ui/skeleton";
 
-const FoodDetail = () => {
+interface FoodDetailProps {
+  isLoading?: boolean;
+}
+
+const FoodDetail = ({ isLoading = false }: FoodDetailProps) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { foodListings, user, claimListing } = useApp();
@@ -32,6 +36,29 @@ const FoodDetail = () => {
   const [showChat, setShowChat] = useState(false);
   
   const listing = foodListings.find((item) => item.id === id);
+  
+  if (isLoading) {
+    return (
+      <div className="max-w-4xl mx-auto p-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <div className="h-[300px]">
+              <Skeleton className="w-full h-full" />
+            </div>
+            <CardHeader>
+              <Skeleton className="h-8 w-2/3 mb-2" />
+              <Skeleton className="h-4 w-1/2" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-3/4" />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
   
   if (!listing) {
     return (
@@ -48,7 +75,7 @@ const FoodDetail = () => {
   const isOwnListing = user?.id === listing.postedBy.id;
   const canClaim = !isOwnListing && !listing.isClaimed && user;
   
-  const handleClaimSubmit = () => {
+  const handleClaimSubmit = async () => {
     if (!pickupDate) return;
     
     // Combine date and time
@@ -56,7 +83,8 @@ const FoodDetail = () => {
     const pickupDateTime = new Date(pickupDate);
     pickupDateTime.setHours(hours, minutes);
     
-    if (claimListing(listing.id, pickupDateTime)) {
+    const success = await claimListing(listing.id, pickupDateTime);
+    if (success) {
       setShowChat(true);
     }
   };

@@ -16,6 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useApp } from "@/context/AppContext";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "@/lib/supabase";
+import { toast } from "@/components/ui/sonner";
 
 const formSchema = z.object({
   title: z.string().min(3, { message: "Title must be at least 3 characters" }),
@@ -46,21 +48,49 @@ const AddFoodForm = () => {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
     
-    const { address, expiresAt, ...rest } = values;
-    
-    addFoodListing({
-      ...rest,
-      location: {
-        address: values.address,
-        // In a real app, we would geocode the address
-        latitude: user?.location.latitude || 0,
-        longitude: user?.location.longitude || 0,
-      },
-      expiresAt: expiresAt ? new Date(expiresAt) : undefined,
-    });
-    
-    setIsSubmitting(false);
-    navigate("/");
+    try {
+      // Extract values
+      const { address, expiresAt, title, description, imageUrl } = values;
+      
+      // Create the listing in Supabase
+      const { data, error } = await supabase.from('food_listings').insert({
+        title, // Ensure title is included
+        description,
+        image_url: imageUrl,
+        location: {
+          address,
+          // In a real app, we would geocode the address
+          latitude: user?.location.latitude || 0,
+          longitude: user?.location.longitude || 0,
+        },
+        posted_by: user?.id,
+        is_claimed: false,
+        expires_at: expiresAt ? new Date(expiresAt).toISOString() : null
+      }).select();
+      
+      if (error) throw error;
+      
+      // Also use the context function to update local state
+      addFoodListing({
+        title, // Make sure title is included
+        description, 
+        imageUrl,
+        location: {
+          address,
+          latitude: user?.location.latitude || 0,
+          longitude: user?.location.longitude || 0,
+        },
+        expiresAt: expiresAt ? new Date(expiresAt) : undefined,
+      });
+      
+      toast.success("Food listing added successfully");
+      navigate("/");
+    } catch (error) {
+      console.error("Error adding food listing:", error);
+      toast.error("Failed to add food listing");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

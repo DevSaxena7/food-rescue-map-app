@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useEffect } from "react";
 import Layout from "@/components/layout/Layout";
 import FoodMap from "@/components/map/FoodMap";
 import { useApp } from "@/context/AppContext";
@@ -12,7 +12,12 @@ import {
 } from "@/components/ui/card";
 
 const MapPage = () => {
-  const { foodListings } = useApp();
+  const { foodListings, fetchFoodListings } = useApp();
+  
+  useEffect(() => {
+    // Refresh the listings when the map page is loaded
+    fetchFoodListings();
+  }, [fetchFoodListings]);
   
   // Only show available (not claimed) listings
   const availableListings = foodListings.filter(listing => !listing.isClaimed);
