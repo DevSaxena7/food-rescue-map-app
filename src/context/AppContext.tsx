@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, FoodListing, Message, Claim } from '@/types';
 import { currentUser, messages as initialMessages, claims as initialClaims } from '@/lib/mock-data';
@@ -61,11 +62,12 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
         description: item.description,
         imageUrl: item.image_url,
         postedBy: {
-          id: item.profiles.id,
-          email: item.profiles.email,
-          name: item.profiles.name,
-          location: item.profiles.location,
-          points: item.profiles.points,
+          // Ensure profiles is an object, not an array
+          id: item.profiles?.id,
+          email: item.profiles?.email,
+          name: item.profiles?.name,
+          location: item.profiles?.location,
+          points: item.profiles?.points,
           createdAt: new Date()
         },
         location: item.location,
