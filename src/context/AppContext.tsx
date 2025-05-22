@@ -1,18 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, FoodListing, Message, Claim } from '@/types';
-import { currentUser, messages as initialMessages, claims as initialClaims } from '@/lib/mock-data';
-import { toast } from '@/components/ui/sonner';
+import { User as AppUser, FoodListing, Message, Claim } from '@/types';
+import { messages as initialMessages, claims as initialClaims } from '@/lib/mock-data';
+import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
+import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 
 interface AppContextType {
-  user: User | null;
+  user: SupabaseUser | null;
+  profile: AppUser | null;
   foodListings: FoodListing[];
   messages: Message[];
   claims: Claim[];
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<boolean>;
+  setUser: (user: SupabaseUser | null) => void;
+  setSession: (session: Session | null) => void;
   logout: () => void;
-  register: (email: string, password: string, name: string, address: string) => Promise<boolean>;
   addFoodListing: (listing: Omit<FoodListing, 'id' | 'postedBy' | 'isClaimed' | 'createdAt'>) => void;
   claimListing: (listingId: string, pickupTime: Date) => Promise<boolean>;
   sendMessage: (receiverId: string, content: string) => void;
@@ -23,11 +25,88 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(currentUser);
+  // Authentication state
+  const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<AppUser | null>(null);
+  
+  // App data
   const [foodListings, setFoodListings] = useState<FoodListing[]>([]);
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [claims, setClaims] = useState<Claim[]>(initialClaims);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Set up auth state listener on mount
+  useEffect(() => {
+    // Set up the auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, newSession) => {
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+
+        if (event === 'SIGNED_IN' && newSession?.user) {
+          // Fetch user profile after sign in 
+          setTimeout(() => {
+            fetchUserProfile(newSession.user.id);
+          }, 0);
+        } else if (event === 'SIGNED_OUT') {
+          setProfile(null);
+        }
+      }
+    );
+
+    // Check for existing session
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      setSession(currentSession);
+      setUser(currentSession?.user ?? null);
+      
+      if (currentSession?.user) {
+        fetchUserProfile(currentSession.user.id);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Fetch user profile data
+  const fetchUserProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        console.error('Error fetching profile:', error);
+        return;
+      }
+      
+      if (data) {
+        let location;
+        try {
+          location = typeof data.location === 'string' 
+            ? JSON.parse(data.location) 
+            : data.location || { address: 'Unknown location', latitude: 0, longitude: 0 };
+        } catch (e) {
+          location = { address: 'Unknown location', latitude: 0, longitude: 0 };
+        }
+        
+        setProfile({
+          id: data.id,
+          name: data.name || 'Unknown User',
+          email: data.email || '',
+          location,
+          points: data.points || 0,
+          createdAt: new Date(data.created_at)
+        });
+      }
+    } catch (error) {
+      console.error('Error in fetchUserProfile:', error);
+    }
+  };
 
   // Fetch food listings from Supabase
   const fetchFoodListings = async () => {
@@ -55,26 +134,43 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // Transform Supabase data to match our FoodListing type
-      const transformedListings: FoodListing[] = data.map(item => ({
-        id: item.id,
-        title: item.title,
-        description: item.description,
-        imageUrl: item.image_url,
-        postedBy: {
-          // Fix: Properly access the profiles object properties
-          id: item.profiles?.id || 'unknown',
-          email: item.profiles?.email || 'unknown',
-          name: item.profiles?.name || 'Unknown User',
-          location: item.profiles?.location || { address: 'Unknown location', latitude: 0, longitude: 0 },
-          points: item.profiles?.points || 0,
-          createdAt: new Date()
-        },
-        location: item.location,
-        isClaimed: item.is_claimed,
-        claimedBy: item.claimed_by,
-        createdAt: new Date(item.created_at),
-        expiresAt: item.expires_at ? new Date(item.expires_at) : undefined
-      }));
+      const transformedListings: FoodListing[] = data.map(item => {
+        let profileData = item.profiles;
+        
+        // Handle the case where profiles could be an array or an object
+        if (Array.isArray(profileData)) {
+          profileData = profileData[0] || {};
+        }
+        
+        let postedByLocation;
+        try {
+          postedByLocation = typeof profileData?.location === 'string'
+            ? JSON.parse(profileData.location)
+            : profileData?.location || { address: 'Unknown location', latitude: 0, longitude: 0 };
+        } catch (e) {
+          postedByLocation = { address: 'Unknown location', latitude: 0, longitude: 0 };
+        }
+        
+        return {
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          imageUrl: item.image_url,
+          postedBy: {
+            id: profileData?.id || 'unknown',
+            email: profileData?.email || 'unknown',
+            name: profileData?.name || 'Unknown User',
+            location: postedByLocation,
+            points: profileData?.points || 0,
+            createdAt: new Date()
+          },
+          location: item.location,
+          isClaimed: item.is_claimed,
+          claimedBy: item.claimed_by,
+          createdAt: new Date(item.created_at),
+          expiresAt: item.expires_at ? new Date(item.expires_at) : undefined
+        };
+      });
 
       setFoodListings(transformedListings);
     } catch (error) {
@@ -89,56 +185,28 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     fetchFoodListings();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    // Mock login functionality
-    if (email && password) {
-      setUser(currentUser);
-      toast.success("Logged in successfully");
-      return true;
+  const logout = async () => {
+    try {
+      await supabase.auth.signOut({ scope: 'global' });
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      toast.info("Logged out successfully");
+    } catch (error) {
+      console.error("Error logging out:", error);
+      toast.error("Error logging out");
     }
-    toast.error("Invalid credentials");
-    return false;
-  };
-
-  const logout = () => {
-    setUser(null);
-    toast.info("Logged out successfully");
-  };
-
-  const register = async (email: string, password: string, name: string, address: string) => {
-    // Mock registration
-    if (email && password && name && address) {
-      const newUser: User = {
-        id: `user-${Date.now()}`,
-        email,
-        name,
-        location: {
-          address,
-          // In a real app, we would geocode the address
-          latitude: 40.7128,
-          longitude: -74.006,
-        },
-        points: 0,
-        createdAt: new Date(),
-      };
-      
-      setUser(newUser);
-      toast.success("Registered successfully");
-      return true;
-    }
-    toast.error("Please fill all fields");
-    return false;
   };
 
   const addFoodListing = async (listing: Omit<FoodListing, 'id' | 'postedBy' | 'isClaimed' | 'createdAt'>) => {
-    if (user) {
+    if (user && profile) {
       try {
         // The actual insert to Supabase is now handled in the form
         // We just need to update the local state with optimistic updates
         const newListing: FoodListing = {
           id: `listing-${Date.now()}`, // Temporary ID, will be replaced by Supabase's
           ...listing,
-          postedBy: user,
+          postedBy: profile,
           isClaimed: false,
           createdAt: new Date(),
         };
@@ -269,13 +337,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const value = {
     user,
+    profile,
     foodListings,
     messages,
     claims,
     isAuthenticated: !!user,
-    login,
+    setUser,
+    setSession,
     logout,
-    register,
     addFoodListing,
     claimListing,
     sendMessage,

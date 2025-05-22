@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -14,6 +14,9 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useApp } from '@/context/AppContext';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import { supabase, cleanupAuthState } from '@/lib/supabase';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters' }),
@@ -27,7 +30,9 @@ const formSchema = z.object({
 });
 
 const RegisterForm = () => {
-  const { register } = useApp();
+  const { setUser, setSession } = useApp();
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -41,7 +46,71 @@ const RegisterForm = () => {
   });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    await register(values.email, values.password, values.name, values.address);
+    try {
+      setIsLoading(true);
+      
+      // Clean up any existing auth state
+      cleanupAuthState();
+      
+      // Try global sign out first
+      try {
+        await supabase.auth.signOut({ scope: 'global' });
+      } catch (err) {
+        // Continue even if this fails
+      }
+      
+      // Sign up with email and password
+      const { data, error } = await supabase.auth.signUp({
+        email: values.email,
+        password: values.password,
+        options: {
+          data: {
+            name: values.name,
+            address: values.address,
+            // Store additional metadata for our profiles table
+            location: {
+              address: values.address,
+              latitude: 0, // In a real app, we would geocode the address
+              longitude: 0,
+            }
+          }
+        }
+      });
+      
+      if (error) throw error;
+      
+      if (data.user) {
+        // Insert profile data directly
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: data.user.id,
+            name: values.name,
+            email: values.email,
+            location: JSON.stringify({
+              address: values.address,
+              latitude: 0, 
+              longitude: 0,
+            }),
+            points: 0
+          });
+          
+        if (profileError) {
+          console.error("Error creating profile:", profileError);
+          toast.error("Account created but profile setup failed");
+        }
+        
+        setSession(data.session);
+        setUser(data.user);
+        toast.success("Account created successfully!");
+        navigate('/');
+      }
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      toast.error(error.message || "Failed to register");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -114,8 +183,8 @@ const RegisterForm = () => {
               </FormItem>
             )}
           />
-          <Button type="submit" className="w-full">
-            Register
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? "Creating account..." : "Register"}
           </Button>
         </form>
       </Form>

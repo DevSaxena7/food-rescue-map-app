@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -14,6 +14,9 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useApp } from '@/context/AppContext';
+import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
+import { supabase, cleanupAuthState } from '@/lib/supabase';
 
 const formSchema = z.object({
   email: z.string().email({ message: 'Please enter a valid email address' }),
@@ -21,7 +24,9 @@ const formSchema = z.object({
 });
 
 const LoginForm = () => {
-  const { login } = useApp();
+  const { setUser, setSession } = useApp();
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
   
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -32,7 +37,39 @@ const LoginForm = () => {
   });
 
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
-    await login(values.email, values.password);
+    try {
+      setIsLoading(true);
+      
+      // Clean up any existing auth state
+      cleanupAuthState();
+      
+      // Try global sign out first
+      try {
+        await supabase.auth.signOut({ scope: 'global' });
+      } catch (err) {
+        // Continue even if this fails
+      }
+      
+      // Sign in with email/password
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: values.email,
+        password: values.password,
+      });
+      
+      if (error) throw error;
+      
+      if (data.user && data.session) {
+        setSession(data.session);
+        setUser(data.user);
+        toast.success("Logged in successfully");
+        navigate('/');
+      }
+    } catch (error: any) {
+      console.error('Login error:', error);
+      toast.error(error.message || "Failed to login");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -66,8 +103,8 @@ const LoginForm = () => {
               </FormItem>
             )}
           />
-          <Button type="submit" className="w-full">
-            Login
+          <Button type="submit" className="w-full" disabled={isLoading}>
+            {isLoading ? "Logging in..." : "Login"}
           </Button>
         </form>
       </Form>
