@@ -1,5 +1,6 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User as AppUser, FoodListing, Message, Claim } from '@/types';
+import { User as AppUser, FoodListing, Message, Claim, SupabaseUserProfile } from '@/types';
 import { messages as initialMessages, claims as initialClaims } from '@/lib/mock-data';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
@@ -7,7 +8,7 @@ import { Session, User as SupabaseUser } from '@supabase/supabase-js';
 
 interface AppContextType {
   user: SupabaseUser | null;
-  profile: AppUser | null;
+  profile: SupabaseUserProfile | null;
   foodListings: FoodListing[];
   messages: Message[];
   claims: Claim[];
@@ -28,7 +29,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   // Authentication state
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<AppUser | null>(null);
+  const [profile, setProfile] = useState<SupabaseUserProfile | null>(null);
   
   // App data
   const [foodListings, setFoodListings] = useState<FoodListing[]>([]);
@@ -85,20 +86,20 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       }
       
       if (data) {
-        let location;
+        let locationData;
         try {
-          location = typeof data.location === 'string' 
+          locationData = typeof data.location === 'string' 
             ? JSON.parse(data.location) 
             : data.location || { address: 'Unknown location', latitude: 0, longitude: 0 };
         } catch (e) {
-          location = { address: 'Unknown location', latitude: 0, longitude: 0 };
+          locationData = { address: 'Unknown location', latitude: 0, longitude: 0 };
         }
         
         setProfile({
           id: data.id,
           name: data.name || 'Unknown User',
           email: data.email || '',
-          location,
+          location: locationData,
           points: data.points || 0,
           createdAt: new Date(data.created_at)
         });

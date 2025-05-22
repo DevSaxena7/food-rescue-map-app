@@ -18,7 +18,7 @@ import { AwardIcon, MapPinIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const ProfilePage = () => {
-  const { user, isAuthenticated, foodListings } = useApp();
+  const { profile, isAuthenticated, foodListings } = useApp();
   const navigate = useNavigate();
   
   // If not authenticated, redirect to login
@@ -28,21 +28,28 @@ const ProfilePage = () => {
     }
   }, [isAuthenticated, navigate]);
   
-  if (!user) {
-    return null; // Will redirect to login
+  if (!profile) {
+    return (
+      <Layout>
+        <div className="max-w-4xl mx-auto p-8 text-center">
+          <h2 className="text-xl font-medium mb-4">Loading profile...</h2>
+        </div>
+      </Layout>
+    ); 
   }
   
   // Filter listings by user
   const userListings = foodListings.filter(
-    listing => listing.postedBy.id === user.id
+    listing => listing.postedBy.id === profile.id
   );
   
   // Filter listings claimed by user
   const claimedListings = foodListings.filter(
-    listing => listing.isClaimed && listing.claimedBy === user.id
+    listing => listing.isClaimed && listing.claimedBy === profile.id
   );
   
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | null | undefined) => {
+    if (!name) return "U";
     return name
       .split(" ")
       .map((n) => n[0])
@@ -58,21 +65,23 @@ const ProfilePage = () => {
             <div className="flex flex-col sm:flex-row gap-4 items-center sm:items-start">
               <Avatar className="w-20 h-20">
                 <AvatarFallback className="text-xl bg-primary text-primary-foreground">
-                  {getInitials(user.name)}
+                  {getInitials(profile.name)}
                 </AvatarFallback>
               </Avatar>
               <div className="text-center sm:text-left">
-                <CardTitle className="text-2xl">{user.name}</CardTitle>
-                <CardDescription>{user.email}</CardDescription>
+                <CardTitle className="text-2xl">{profile.name || "User"}</CardTitle>
+                <CardDescription>{profile.email}</CardDescription>
                 <div className="flex flex-col sm:flex-row gap-2 mt-2">
                   <div className="flex items-center gap-1 text-sm">
                     <MapPinIcon className="h-4 w-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">{user.location.address}</span>
+                    <span className="text-muted-foreground">
+                      {profile.location?.address || "Location not set"}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Badge className="flex gap-1 items-center bg-secondary">
                       <AwardIcon className="h-3 w-3" />
-                      <span>{user.points} points</span>
+                      <span>{profile.points || 0} points</span>
                     </Badge>
                   </div>
                 </div>

@@ -46,3 +46,17 @@ export interface Claim {
   status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
   createdAt: Date;
 }
+
+// Extended Supabase user type to differentiate from our app User type
+export interface SupabaseUserProfile {
+  id: string;
+  email: string | null;
+  name: string | null; 
+  location: {
+    address: string;
+    latitude: number;
+    longitude: number;
+  } | null;
+  points: number;
+  createdAt: Date;
+}

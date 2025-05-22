@@ -16,7 +16,7 @@ import { PlusIcon, MapPinIcon, AwardIcon, UserIcon } from "lucide-react";
 import { ModeToggle } from "./ModeToggle";
 
 const Header = () => {
-  const { user, isAuthenticated, logout } = useApp();
+  const { profile, isAuthenticated, logout } = useApp();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -24,7 +24,8 @@ const Header = () => {
     navigate("/");
   };
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | null | undefined) => {
+    if (!name) return "U";
     return name
       .split(" ")
       .map((n) => n[0])
@@ -65,7 +66,7 @@ const Header = () => {
               </Button>
               <div className="hidden sm:flex items-center gap-1 text-sm mr-2 px-2 py-1 bg-accent rounded-md">
                 <AwardIcon className="h-4 w-4 text-secondary" />
-                <span>{user?.points} points</span>
+                <span>{profile?.points || 0} points</span>
               </div>
               <ModeToggle />
               <DropdownMenu>
@@ -77,7 +78,7 @@ const Header = () => {
                   >
                     <Avatar className="h-8 w-8">
                       <AvatarFallback className="bg-primary text-primary-foreground text-xs">
-                        {user?.name ? getInitials(user.name) : "U"}
+                        {getInitials(profile?.name)}
                       </AvatarFallback>
                     </Avatar>
                   </Button>
